@@ -1,0 +1,45 @@
+@startuml
+package "ENVi System" {
+    
+    package "Frontend (React.js)" {
+        class "User Interface" 
+        class "Visualization Selection"
+        class "REST API Calls to Backend"
+    }
+
+    package "Backend (Django API)" {
+        class "Authentication (JWT)"
+        class "API for Ingestion, Processing, Visualization"
+    }
+
+    package "Data Ingestion & Staging" {
+        class "PostgreSQL, MySQL, MongoDB"
+        class "Data Extraction & Validation"
+    }
+
+    package "AI-Driven BI Module" {
+        class "Pattern Recognition"
+        class "Automatic Chart Suggestion"
+    }
+
+    package "Visualization Engine" {
+        class "Chart Rendering (Plotly.js)"
+        class "Dynamic Updates"
+    }
+
+    package "Database (PostgreSQL)" {
+        class "Stores Users, Dashboards, Ingestion Logs"
+    }
+
+    "User Interface" --> "REST API Calls to Backend"
+    "REST API Calls to Backend" --> "Authentication (JWT)"
+    "API for Ingestion, Processing, Visualization" --> "PostgreSQL, MySQL, MongoDB"
+    "PostgreSQL, MySQL, MongoDB" --> "Data Extraction & Validation"
+    "Data Extraction & Validation" --> "Pattern Recognition"
+    "Pattern Recognition" --> "Automatic Chart Suggestion"
+    "Automatic Chart Suggestion" --> "Chart Rendering (Plotly.js)"
+    "Chart Rendering (Plotly.js)" --> "Dynamic Updates"
+    "API for Ingestion, Processing, Visualization" --> "Stores Users, Dashboards, Ingestion Logs"
+    
+}
+@enduml
