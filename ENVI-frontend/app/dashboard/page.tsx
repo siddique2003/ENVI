@@ -6,15 +6,17 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { LogOut, Upload, FileType, Database, ChevronRight, BarChart2, FileText } from "lucide-react"
+import { LogOut, Upload, FileType, Database, ChevronRight, BarChart2, FileText, Loader2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useRouter } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function Dashboard() {
   const router = useRouter()
+  const { data: session, status } = useSession()
   const [file, setFile] = useState<File | null>(null)
   const { resolvedTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
   const [showError, setShowError] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
@@ -23,21 +25,6 @@ export default function Dashboard() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [showSuccessEffect, setShowSuccessEffect] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    setMounted(true)
-
-    // Trigger glitch effect randomly
-    const glitchInterval = setInterval(
-      () => {
-        setGlitchActive(true)
-        setTimeout(() => setGlitchActive(false), 200)
-      },
-      Math.random() * 8000 + 5000,
-    )
-
-    return () => clearInterval(glitchInterval)
-  }, [])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -55,21 +42,6 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
-    const checkAuth = () => {
-      setMounted(true)
-      const isLoggedIn = localStorage.getItem("isLoggedIn") === "true"
-      const hasAuthCookie = document.cookie.includes("isLoggedIn=true")
-
-      if (!isLoggedIn || !hasAuthCookie) {
-        router.replace("/login")
-      }
-    }
-
-    checkAuth()
-  }, [router])
-
-  // Simulated upload progress
-  useEffect(() => {
     if (uploading && uploadProgress < 95) {
       const interval = setInterval(() => {
         setUploadProgress((prev) => {
@@ -81,362 +53,300 @@ export default function Dashboard() {
     }
   }, [uploading, uploadProgress])
 
-  if (!mounted) return null
-
-  const isDark = resolvedTheme === "dark"
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFile = e.target.files?.[0]
-    if (uploadedFile) {
-      if (uploadedFile.name.endsWith(".csv") || uploadedFile.name.endsWith(".xlsx")) {
-        setFile(uploadedFile)
-        setShowError(false)
-
-        // Trigger glitch effect on file selection
-        setGlitchActive(true)
-        setTimeout(() => setGlitchActive(false), 300)
-      } else {
-        alert("Please upload only CSV or XLSX files")
-      }
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login")
     }
+  }, [status, router])
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-[#0a0014]">
+        <Loader2 className="h-16 w-16 animate-spin text-purple-500 dark:text-cyan-400" />
+      </div>
+    )
   }
 
-  const startAnalysis = async () => {
-    if (!file) {
-      setShowError(true)
-      setTimeout(() => setShowError(false), 3000)
-      return
+  if (status === "unauthenticated") {
+    return null
+  }
+
+  if (status === "authenticated") {
+    const isDark = resolvedTheme === "dark"
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const uploadedFile = e.target.files?.[0]
+      if (uploadedFile) {
+        if (uploadedFile.name.endsWith(".csv") || uploadedFile.name.endsWith(".xlsx")) {
+          setFile(uploadedFile)
+          setShowError(false)
+
+          setGlitchActive(true)
+          setTimeout(() => setGlitchActive(false), 300)
+        } else {
+          alert("Please upload only CSV or XLSX files")
+        }
+      }
     }
 
-    setUploading(true)
-    setUploadProgress(0)
-
-    const formData = new FormData()
-    formData.append("file", file)
-
-    try {
-      const uploadRes = await fetch("http://127.0.0.1:8000/api/upload-csv/", {
-        method: "POST",
-        body: formData,
-      })
-
-      const result = await uploadRes.json()
-
-      if (!uploadRes.ok) {
-        alert(result.error || "CSV Upload failed!")
+    const startAnalysis = async () => {
+      if (!file) {
+        setShowError(true)
+        setTimeout(() => setShowError(false), 3000)
         return
       }
 
-      // Set upload to 100% complete
-      setUploadProgress(100)
-
-      // Show success effect
-      setShowSuccessEffect(true)
-
-      // Save visualization data
-      localStorage.setItem(
-        "visualizationData",
-        JSON.stringify({
-          table_name: result.table_name,
-          columns: result.cleaned_columns,
-          preview: result.preview,
-        }),
-      )
-
-      // Delay redirect to show the success animation
-      setTimeout(() => {
-        console.log("🔁 Redirecting to /hypothesis-testing")
-        router.push("/hypothesis-testing")
-      }, 1500)
-    } catch (error) {
-      console.error("Upload error:", error)
-      alert("An error occurred during upload.")
-      setUploading(false)
+      setUploading(true)
       setUploadProgress(0)
+
+      const formData = new FormData()
+      formData.append("file", file)
+
+      try {
+        const uploadRes = await fetch("http://127.0.0.1:8000/api/upload-csv/", {
+          method: "POST",
+          body: formData,
+        })
+
+        const result = await uploadRes.json()
+
+        if (!uploadRes.ok) {
+          alert(result.error || "CSV Upload failed!")
+          return
+        }
+
+        setUploadProgress(100)
+
+        setShowSuccessEffect(true)
+
+        localStorage.setItem(
+          "visualizationData",
+          JSON.stringify({
+            table_name: result.table_name,
+            columns: result.cleaned_columns,
+            preview: result.preview,
+          }),
+        )
+
+        setTimeout(() => {
+          console.log("🔁 Redirecting to /hypothesis-testing")
+          router.push("/hypothesis-testing")
+        }, 1500)
+      } catch (error) {
+        console.error("Upload error:", error)
+        alert("An error occurred during upload.")
+        setUploading(false)
+        setUploadProgress(0)
+      }
     }
-  }
 
-  const handleLogout = () => {
-    localStorage.removeItem("isLoggedIn")
-    document.cookie = "isLoggedIn=false; path=/"
-    router.replace("/")
-  }
-
-  const triggerFileInput = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click()
+    const handleLogout = () => {
+      signOut({ callbackUrl: "/" })
     }
-  }
 
-  return (
-    <div
-      ref={containerRef}
-      className="min-h-screen bg-gray-100 dark:bg-[#0a0014] antialiased relative overflow-hidden transition-colors duration-700"
-    >
-      {/* Cyberpunk Grid Background */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden -z-10">
-        <div
-          className="absolute inset-0 bg-[linear-gradient(to_right,#8a2be212_1px,transparent_1px),linear-gradient(to_bottom,#8a2be212_1px,transparent_1px)] bg-[size:30px_30px] 
-                     dark:bg-[linear-gradient(to_right,#bf00ff12_1px,transparent_1px),linear-gradient(to_bottom,#bf00ff12_1px,transparent_1px)] 
-                     [mask-image:radial-gradient(ellipse_70%_70%_at_50%_50%,#000_60%,transparent_100%)]"
-        ></div>
-      </div>
+    const triggerFileInput = () => {
+      if (fileInputRef.current) {
+        fileInputRef.current.click()
+      }
+    }
 
-      {/* 3D Floating Elements */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none">
-        {/* Top left floating cube */}
-        <div className="absolute top-[15%] left-[10%] w-16 h-16 opacity-30 dark:opacity-40 animate-float-slow">
-          <div className="cube">
-            <div className="cube__face cube__face--front"></div>
-            <div className="cube__face cube__face--back"></div>
-            <div className="cube__face cube__face--right"></div>
-            <div className="cube__face cube__face--left"></div>
-            <div className="cube__face cube__face--top"></div>
-            <div className="cube__face cube__face--bottom"></div>
-          </div>
-        </div>
-
-        {/* Bottom right floating pyramid */}
-        <div className="absolute bottom-[20%] right-[15%] w-20 h-20 opacity-30 dark:opacity-40 animate-float-slow-reverse">
-          <div className="pyramid">
-            <div className="pyramid__face pyramid__face--front"></div>
-            <div className="pyramid__face pyramid__face--right"></div>
-            <div className="pyramid__face pyramid__face--left"></div>
-            <div className="pyramid__face pyramid__face--bottom"></div>
-          </div>
-        </div>
-
-        {/* Middle floating sphere */}
-        <div className="absolute top-[40%] right-[25%] opacity-20 dark:opacity-30">
-          <div className="sphere animate-pulse-slow"></div>
-        </div>
-      </div>
-
-      {/* Digital Rain Effect */}
-      <div className="absolute inset-0 overflow-hidden opacity-20 dark:opacity-30 pointer-events-none">
-        {Array.from({ length: 20 }).map((_, i) => (
-          <div
-            key={`rain-${i}`}
-            className="digital-rain"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDuration: `${Math.random() * 10 + 5}s`,
-              animationDelay: `${Math.random() * 5}s`,
-            }}
-          >
-            {Array.from({ length: Math.floor(Math.random() * 20) + 10 }).map((_, j) => (
-              <div
-                key={`rain-char-${j}`}
-                className="digital-rain__char"
-                style={{
-                  animationDelay: `${Math.random() * 2}s`,
-                }}
-              >
-                {String.fromCharCode(Math.floor(Math.random() * 74) + 48)}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      {/* Glowing Nodes and Connections */}
-      <div className="absolute inset-0 overflow-hidden opacity-30 dark:opacity-40 pointer-events-none">
-        <svg width="100%" height="100%" className="absolute inset-0">
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="5" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-
-          {/* Nodes */}
-          <circle cx="10%" cy="20%" r="2" className="node" />
-          <circle cx="30%" cy="15%" r="2" className="node" />
-          <circle cx="50%" cy="10%" r="2" className="node" />
-          <circle cx="70%" cy="25%" r="2" className="node" />
-          <circle cx="90%" cy="15%" r="2" className="node" />
-
-          <circle cx="15%" cy="85%" r="2" className="node" />
-          <circle cx="35%" cy="90%" r="2" className="node" />
-          <circle cx="55%" cy="80%" r="2" className="node" />
-          <circle cx="75%" cy="85%" r="2" className="node" />
-          <circle cx="95%" cy="90%" r="2" className="node" />
-
-          {/* Connections */}
-          <line x1="10%" y1="20%" x2="30%" y2="15%" className="connection" />
-          <line x1="30%" y1="15%" x2="50%" y2="10%" className="connection" />
-          <line x1="50%" y1="10%" x2="70%" y2="25%" className="connection" />
-          <line x1="70%" y1="25%" x2="90%" y2="15%" className="connection" />
-
-          <line x1="15%" y1="85%" x2="35%" y2="90%" className="connection" />
-          <line x1="35%" y1="90%" x2="55%" y2="80%" className="connection" />
-          <line x1="55%" y1="80%" x2="75%" y2="85%" className="connection" />
-          <line x1="75%" y1="85%" x2="95%" y2="90%" className="connection" />
-        </svg>
-      </div>
-
-      {/* Animated Gradient Orbs */}
-      <div className="absolute inset-0 overflow-hidden -z-5">
-        <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-500/20 dark:bg-purple-600/20 rounded-full blur-3xl animate-float-slow"></div>
-        <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-cyan-500/20 dark:bg-cyan-600/20 rounded-full blur-3xl animate-float-slow-reverse"></div>
-      </div>
-
-      {/* Scanlines Effect */}
-      <div className="absolute inset-0 bg-scanlines opacity-[0.03] dark:opacity-[0.07] pointer-events-none"></div>
-
-      {/* Glow Effect following mouse */}
+    return (
       <div
-        className="absolute w-[500px] h-[500px] rounded-full pointer-events-none"
-        style={{
-          background: isDark
-            ? `radial-gradient(circle, rgba(191, 0, 255, 0.07) 0%, rgba(0, 255, 255, 0.05) 30%, transparent 70%)`
-            : `radial-gradient(circle, rgba(138, 43, 226, 0.07) 0%, rgba(0, 200, 255, 0.05) 30%, transparent 70%)`,
-          left: `${mousePosition.x - 250}px`,
-          top: `${mousePosition.y - 250}px`,
-          transform: "translate(0, 0)",
-          transition: "background 0.5s ease",
-        }}
-      ></div>
+        ref={containerRef}
+        className="min-h-screen bg-gray-100 dark:bg-[#0a0014] antialiased relative overflow-hidden transition-colors duration-700"
+      >
+        <div className="absolute inset-0 w-full h-full overflow-hidden -z-10">
+          <div
+            className="absolute inset-0 bg-[linear-gradient(to_right,#8a2be212_1px,transparent_1px),linear-gradient(to_bottom,#8a2be212_1px,transparent_1px)] bg-[size:30px_30px] 
+                       dark:bg-[linear-gradient(to_right,#bf00ff12_1px,transparent_1px),linear-gradient(to_bottom,#bf00ff12_1px,transparent_1px)] 
+                       [mask-image:radial-gradient(ellipse_70%_70%_at_50%_50%,#000_60%,transparent_100%)]"
+          ></div>
+        </div>
 
-      {/* Digital Circuit Lines */}
-      <div className="absolute inset-0 overflow-hidden opacity-10 dark:opacity-20">
-        <svg width="100%" height="100%" className="absolute inset-0">
-          <defs>
-            <linearGradient id="circuitGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={isDark ? "#bf00ff" : "#8a2be2"} />
-              <stop offset="100%" stopColor={isDark ? "#00ffff" : "#00c8ff"} />
-            </linearGradient>
-          </defs>
-          <path
-            d="M0,100 Q50,50 100,100 T200,100 T300,100 T400,100"
-            stroke="url(#circuitGradient)"
-            strokeWidth="0.5"
-            fill="none"
-            className="animate-draw-path"
-          />
-          <path
-            d="M0,200 Q100,150 200,200 T400,200"
-            stroke="url(#circuitGradient)"
-            strokeWidth="0.5"
-            fill="none"
-            className="animate-draw-path-delay"
-          />
-          <path
-            d="M100,0 Q150,100 100,200 T100,400"
-            stroke="url(#circuitGradient)"
-            strokeWidth="0.5"
-            fill="none"
-            className="animate-draw-path-delay-2"
-          />
-          <path
-            d="M300,0 Q250,100 300,200 T300,400"
-            stroke="url(#circuitGradient)"
-            strokeWidth="0.5"
-            fill="none"
-            className="animate-draw-path-delay-3"
-          />
-        </svg>
-      </div>
+        <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none">
+          <div className="absolute top-[15%] left-[10%] w-16 h-16 opacity-30 dark:opacity-40 animate-float-slow">
+            <div className="cube">
+              <div className="cube__face cube__face--front"></div>
+              <div className="cube__face cube__face--back"></div>
+              <div className="cube__face cube__face--right"></div>
+              <div className="cube__face cube__face--left"></div>
+              <div className="cube__face cube__face--top"></div>
+              <div className="cube__face cube__face--bottom"></div>
+            </div>
+          </div>
 
-      {/* Data Stream Animation */}
-      <div className="absolute left-0 top-0 w-full h-full overflow-hidden pointer-events-none">
-        {Array.from({ length: 15 }).map((_, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: -100, x: Math.random() * window.innerWidth }}
-            animate={{
-              opacity: [0, 0.5, 0],
-              y: window.innerHeight + 100,
-              transition: {
-                repeat: Number.POSITIVE_INFINITY,
-                duration: Math.random() * 10 + 10,
-                delay: Math.random() * 5,
-              },
-            }}
-            className={`absolute w-px h-20 ${i % 2 === 0 ? "bg-purple-400/30 dark:bg-purple-500/30" : "bg-cyan-400/30 dark:bg-cyan-500/30"}`}
-          />
-        ))}
-      </div>
+          <div className="absolute bottom-[20%] right-[15%] w-20 h-20 opacity-30 dark:opacity-40 animate-float-slow-reverse">
+            <div className="pyramid">
+              <div className="pyramid__face pyramid__face--front"></div>
+              <div className="pyramid__face pyramid__face--right"></div>
+              <div className="pyramid__face pyramid__face--left"></div>
+              <div className="pyramid__face pyramid__face--bottom"></div>
+            </div>
+          </div>
 
-      {/* Navigation */}
-      <div className="absolute top-6 right-8 z-50 flex items-center gap-4">
-        <Button
-          variant="ghost"
-          onClick={handleLogout}
-          className="gap-2 text-gray-600 dark:text-gray-400 hover:text-purple-500 dark:hover:text-cyan-400 transition-colors relative group"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Logout</span>
-          <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-500 to-cyan-500 group-hover:w-full transition-all duration-300"></span>
-        </Button>
-      </div>
+          <div className="absolute top-[40%] right-[25%] opacity-20 dark:opacity-30">
+            <div className="sphere animate-pulse-slow"></div>
+          </div>
+        </div>
 
-      {/* Error Alert */}
-      <AnimatePresence>
-        {showError && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md"
-          >
-            <Alert variant="destructive" className="bg-red-500/10 border-red-500/50 text-red-500 mx-4 backdrop-blur-md">
-              <AlertDescription className="text-center">Please upload a file before starting analysis</AlertDescription>
-            </Alert>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Success Effect */}
-      <AnimatePresence>
-        {showSuccessEffect && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 1.2, opacity: 0 }}
-              className="relative"
+        <div className="absolute inset-0 overflow-hidden opacity-20 dark:opacity-30 pointer-events-none">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <div
+              key={`rain-${i}`}
+              className="digital-rain"
+              style={{
+                left: `${Math.random() * 100}%`,
+                animationDuration: `${Math.random() * 10 + 5}s`,
+                animationDelay: `${Math.random() * 5}s`,
+              }}
             >
-              <div className="w-32 h-32 rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 flex items-center justify-center">
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.2, type: "spring" }}
-                  className="text-white text-5xl"
+              {Array.from({ length: Math.floor(Math.random() * 20) + 10 }).map((_, j) => (
+                <div
+                  key={`rain-char-${j}`}
+                  className="digital-rain__char"
+                  style={{
+                    animationDelay: `${Math.random() * 2}s`,
+                  }}
                 >
-                  ✓
-                </motion.div>
-              </div>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.3 }}
-                className="absolute -inset-4 rounded-full border-2 border-purple-500 animate-ping-slow opacity-50"
-              />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.5 }}
-                className="absolute -inset-8 rounded-full border-2 border-cyan-500 animate-ping-slow opacity-30"
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  {String.fromCharCode(Math.floor(Math.random() * 74) + 48)}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
 
-      {/* Main Content */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="relative z-10 min-h-screen flex flex-col items-center justify-center p-4 md:p-6"
-        >
+        <div className="absolute inset-0 overflow-hidden opacity-30 dark:opacity-40 pointer-events-none">
+          <svg width="100%" height="100%" className="absolute inset-0">
+            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+
+            <circle cx="10%" cy="20%" r="2" className="node" />
+            <circle cx="30%" cy="15%" r="2" className="node" />
+            <circle cx="50%" cy="10%" r="2" className="node" />
+            <circle cx="70%" cy="25%" r="2" className="node" />
+            <circle cx="90%" cy="15%" r="2" className="node" />
+
+            <circle cx="15%" cy="85%" r="2" className="node" />
+            <circle cx="35%" cy="90%" r="2" className="node" />
+            <circle cx="55%" cy="80%" r="2" className="node" />
+            <circle cx="75%" cy="85%" r="2" className="node" />
+            <circle cx="95%" cy="90%" r="2" className="node" />
+
+            <line x1="10%" y1="20%" x2="30%" y2="15%" className="connection" />
+            <line x1="30%" y1="15%" x2="50%" y2="10%" className="connection" />
+            <line x1="50%" y1="10%" x2="70%" y2="25%" className="connection" />
+            <line x1="70%" y1="25%" x2="90%" y2="15%" className="connection" />
+
+            <line x1="15%" y1="85%" x2="35%" y2="90%" className="connection" />
+            <line x1="35%" y1="90%" x2="55%" y2="80%" className="connection" />
+            <line x1="55%" y1="80%" x2="75%" y2="85%" className="connection" />
+            <line x1="75%" y1="85%" x2="95%" y2="90%" className="connection" />
+          </svg>
+        </div>
+
+        <div className="absolute inset-0 overflow-hidden -z-5">
+          <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-500/20 dark:bg-purple-600/20 rounded-full blur-3xl animate-float-slow"></div>
+          <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-cyan-500/20 dark:bg-cyan-600/20 rounded-full blur-3xl animate-float-slow-reverse"></div>
+        </div>
+
+        <div className="absolute inset-0 bg-scanlines opacity-[0.03] dark:opacity-[0.07] pointer-events-none"></div>
+
+        <div
+          className="absolute w-[500px] h-[500px] rounded-full pointer-events-none"
+          style={{
+            background: isDark
+              ? `radial-gradient(circle, rgba(191, 0, 255, 0.07) 0%, rgba(0, 255, 255, 0.05) 30%, transparent 70%)`
+              : `radial-gradient(circle, rgba(138, 43, 226, 0.07) 0%, rgba(0, 200, 255, 0.05) 30%, transparent 70%)`,
+            left: `${mousePosition.x - 250}px`,
+            top: `${mousePosition.y - 250}px`,
+            transform: "translate(0, 0)",
+            transition: "background 0.5s ease",
+          }}
+        ></div>
+
+        <div className="absolute inset-0 overflow-hidden opacity-10 dark:opacity-20">
+          <svg width="100%" height="100%" className="absolute inset-0">
+            <defs>
+              <linearGradient id="circuitGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor={isDark ? "#bf00ff" : "#8a2be2"} />
+                <stop offset="100%" stopColor={isDark ? "#00ffff" : "#00c8ff"} />
+              </linearGradient>
+            </defs>
+            <path
+              d="M0,100 Q50,50 100,100 T200,100 T300,100 T400,100"
+              stroke="url(#circuitGradient)"
+              strokeWidth="0.5"
+              fill="none"
+              className="animate-draw-path"
+            />
+            <path
+              d="M0,200 Q100,150 200,200 T400,200"
+              stroke="url(#circuitGradient)"
+              strokeWidth="0.5"
+              fill="none"
+              className="animate-draw-path-delay"
+            />
+            <path
+              d="M100,0 Q150,100 100,200 T100,400"
+              stroke="url(#circuitGradient)"
+              strokeWidth="0.5"
+              fill="none"
+              className="animate-draw-path-delay-2"
+            />
+            <path
+              d="M300,0 Q250,100 300,200 T300,400"
+              stroke="url(#circuitGradient)"
+              strokeWidth="0.5"
+              fill="none"
+              className="animate-draw-path-delay-3"
+            />
+          </svg>
+        </div>
+
+        <div className="absolute left-0 top-0 w-full h-full overflow-hidden pointer-events-none">
+          {Array.from({ length: 15 }).map((_, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: -100, x: Math.random() * window.innerWidth }}
+              animate={{
+                opacity: [0, 0.5, 0],
+                y: window.innerHeight + 100,
+                transition: {
+                  repeat: Number.POSITIVE_INFINITY,
+                  duration: Math.random() * 10 + 10,
+                  delay: Math.random() * 5,
+                },
+              }}
+              className={`absolute w-px h-20 ${i % 2 === 0 ? "bg-purple-400/30 dark:bg-purple-500/30" : "bg-cyan-400/30 dark:bg-cyan-500/30"}`}
+            />
+          ))}
+        </div>
+
+        <header className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-30">
+          <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-cyan-400 to-purple-600 dark:from-purple-400 dark:via-cyan-300 dark:to-purple-500">
+            ENVI Dashboard
+          </h1>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600 dark:text-gray-300 hidden sm:inline">
+              Welcome, {session?.user?.name || "User"}!
+            </span>
+            <ThemeToggle />
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="text-gray-600 hover:text-red-500 dark:text-gray-300 dark:hover:text-red-400 transition-colors flex items-center gap-2 border border-gray-300 dark:border-gray-700 hover:border-red-500 dark:hover:border-red-400"
+              title="Logout"
+            >
+              <LogOut size={16} />
+              <span>Logout</span>
+            </Button>
+          </div>
+        </header>
+
+        <main className="relative z-10 flex flex-col items-center justify-center min-h-screen p-4 pt-20">
           <div className="w-full max-w-6xl mx-auto">
-            {/* Header */}
             <motion.div
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -451,7 +361,6 @@ export default function Dashboard() {
                   Home
                 </h1>
 
-                {/* Animated highlight line */}
                 <motion.div
                   className="absolute -bottom-1 left-0 h-1 bg-gradient-to-r from-purple-500 via-cyan-400 to-purple-600 dark:from-purple-400 dark:via-cyan-300 dark:to-purple-500"
                   initial={{ width: "0%" }}
@@ -471,9 +380,7 @@ export default function Dashboard() {
               </motion.p>
             </motion.div>
 
-            {/* Main Dashboard Content */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-              {/* Left Panel - Stats */}
               <motion.div
                 initial={{ opacity: 0, x: -50 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -487,7 +394,6 @@ export default function Dashboard() {
                   </h2>
 
                   <div className="space-y-6">
-                    {/* Stats Cards */}
                     {[
                       {
                         title: "Visualizations",
@@ -529,7 +435,6 @@ export default function Dashboard() {
                       </motion.div>
                     ))}
 
-                    {/* Animated Circuit Decoration */}
                     <div className="mt-8 relative h-32">
                       <svg width="100%" height="100%" className="absolute inset-0">
                         <defs>
@@ -572,7 +477,6 @@ export default function Dashboard() {
                 </div>
               </motion.div>
 
-              {/* Right Panel - File Upload */}
               <motion.div
                 initial={{ opacity: 0, x: 50 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -580,10 +484,8 @@ export default function Dashboard() {
                 className="lg:col-span-2"
               >
                 <div className="bg-white/10 dark:bg-black/30 backdrop-blur-xl rounded-2xl border border-purple-300/30 dark:border-cyan-400/30 p-8 relative overflow-hidden group">
-                  {/* Animated Background */}
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
-                  {/* Cyberpunk Circuit Pattern */}
                   <div className="absolute inset-0 opacity-10">
                     <svg width="100%" height="100%" className="absolute inset-0">
                       <pattern
@@ -628,7 +530,6 @@ export default function Dashboard() {
                         <p className="text-gray-600 dark:text-gray-400">Supported formats: XLSX, CSV</p>
                       </motion.div>
 
-                      {/* File Upload Area */}
                       <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -662,11 +563,9 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {/* Hover Effect */}
                         <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-cyan-500/10 opacity-0 group-hover:opacity-30 transition-opacity duration-300 rounded-xl pointer-events-none"></div>
                       </motion.div>
 
-                      {/* Selected File */}
                       <AnimatePresence mode="wait">
                         {file && (
                           <motion.div
@@ -701,7 +600,6 @@ export default function Dashboard() {
                         )}
                       </AnimatePresence>
 
-                      {/* Analysis Button */}
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -732,7 +630,6 @@ export default function Dashboard() {
                           </Button>
                         </div>
 
-                        {/* Upload Progress Bar */}
                         <AnimatePresence>
                           {uploading && (
                             <motion.div
@@ -760,7 +657,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Features Section */}
                 <motion.div
                   initial={{ opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -840,291 +736,349 @@ export default function Dashboard() {
               </motion.div>
             </div>
           </div>
-        </motion.div>
-      </AnimatePresence>
+        </main>
 
-      {/* Custom CSS for animations and effects */}
-      <style jsx global>{`
-        @keyframes float-slow {
-          0%, 100% { transform: translateY(0) translateX(0); }
-          25% { transform: translateY(-10px) translateX(10px); }
-          50% { transform: translateY(-20px) translateX(0); }
-          75% { transform: translateY(-10px) translateX(-10px); }
-        }
-        
-        @keyframes float-slow-reverse {
-          0%, 100% { transform: translateY(0) translateX(0); }
-          25% { transform: translateY(10px) translateX(-10px); }
-          50% { transform: translateY(20px) translateX(0); }
-          75% { transform: translateY(10px) translateX(10px); }
-        }
-        
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 0.3; transform: scale(1); }
-          50% { opacity: 0.7; transform: scale(1.05); }
-        }
-        
-        @keyframes draw-path {
-          0% { stroke-dasharray: 1000; stroke-dashoffset: 1000; }
-          100% { stroke-dashoffset: 0; }
-        }
-        
-        @keyframes spin-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        
-        @keyframes spin-slow-reverse {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(-360deg); }
-        }
-        
-        @keyframes ping-slow {
-          0% { transform: scale(0.8); opacity: 0.8; }
-          70%, 100% { transform: scale(1.5); opacity: 0; }
-        }
-        
-        .animate-float-slow {
-          animation: float-slow 15s ease-in-out infinite;
-        }
-        
-        .animate-float-slow-reverse {
-          animation: float-slow-reverse 18s ease-in-out infinite;
-        }
-        
-        .animate-pulse-slow {
-          animation: pulse-slow 4s ease-in-out infinite;
-        }
-        
-        .animate-spin-slow {
-          animation: spin-slow 20s linear infinite;
-        }
-        
-        .animate-spin-slow-reverse {
-          animation: spin-slow-reverse 25s linear infinite;
-        }
-        
-        .animate-ping-slow {
-          animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-        }
-        
-        .animate-draw-path {
-          stroke-dasharray: 1000;
-          stroke-dashoffset: 1000;
-          animation: draw-path 10s linear forwards;
-        }
-        
-        .animate-draw-path-delay {
-          stroke-dasharray: 1000;
-          stroke-dashoffset: 1000;
-          animation: draw-path 10s linear 1s forwards;
-        }
-        
-        .animate-draw-path-delay-2 {
-          stroke-dasharray: 1000;
-          stroke-dashoffset: 1000;
-          animation: draw-path 10s linear 2s forwards;
-        }
-        
-        .animate-draw-path-delay-3 {
-          stroke-dasharray: 1000;
-          stroke-dashoffset: 1000;
-          animation: draw-path 10s linear 3s forwards;
-        }
-        
-        .bg-scanlines {
-          background: repeating-linear-gradient(
-            to bottom,
-            transparent,
-            transparent 1px,
-            rgba(0, 0, 0, 0.05) 1px,
-            rgba(0, 0, 0, 0.05) 2px
-          );
-          background-size: 100% 4px;
-        }
-        
-        .dark .bg-scanlines {
-          background: repeating-linear-gradient(
-            to bottom,
-            transparent,
-            transparent 1px,
-            rgba(255, 255, 255, 0.05) 1px,
-            rgba(255, 255, 255, 0.05) 2px
-          );
-          background-size: 100% 4px;
-        }
-        
-        /* Glitch effect */
-        .glitch {
-          animation: glitch-skew 1s infinite linear alternate-reverse;
-        }
-        
-        @keyframes glitch-skew {
-          0% { transform: skew(0deg); }
-          20% { transform: skew(0deg); }
-          21% { transform: skew(3deg); }
-          23% { transform: skew(0deg); }
-          40% { transform: skew(-2deg); }
-          41% { transform: skew(0deg); }
-          100% { transform: skew(0deg); }
-        }
+        <AnimatePresence>
+          {showError && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md"
+            >
+              <Alert
+                variant="destructive"
+                className="bg-red-500/10 border-red-500/50 text-red-500 mx-4 backdrop-blur-md"
+              >
+                <AlertDescription className="text-center">
+                  Please upload a file before starting analysis
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        /* 3D Elements */
-        .cube {
-          width: 100%;
-          height: 100%;
-          position: relative;
-          transform-style: preserve-3d;
-          transform: rotateX(-30deg) rotateY(45deg);
-          animation: cube-rotate 20s infinite linear;
-        }
+        <AnimatePresence>
+          {showSuccessEffect && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 1.2, opacity: 0 }}
+                className="relative"
+              >
+                <div className="w-32 h-32 rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 flex items-center justify-center">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.2, type: "spring" }}
+                    className="text-white text-5xl"
+                  >
+                    ✓
+                  </motion.div>
+                </div>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="absolute -inset-4 rounded-full border-2 border-purple-500 animate-ping-slow opacity-50"
+                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.5 }}
+                  className="absolute -inset-8 rounded-full border-2 border-cyan-500 animate-ping-slow opacity-30"
+                />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        .cube__face {
-          position: absolute;
-          width: 100%;
-          height: 100%;
-          border: 1px solid rgba(138, 43, 226, 0.5);
-          background: rgba(138, 43, 226, 0.1);
-        }
+        <style jsx global>{`
+          @keyframes float-slow {
+            0%, 100% { transform: translateY(0) translateX(0); }
+            25% { transform: translateY(-10px) translateX(10px); }
+            50% { transform: translateY(-20px) translateX(0); }
+            75% { transform: translateY(-10px) translateX(-10px); }
+          }
+          
+          @keyframes float-slow-reverse {
+            0%, 100% { transform: translateY(0) translateX(0); }
+            25% { transform: translateY(10px) translateX(-10px); }
+            50% { transform: translateY(20px) translateX(0); }
+            75% { transform: translateY(10px) translateX(10px); }
+          }
+          
+          @keyframes pulse-slow {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+          }
+          
+          @keyframes draw-path {
+            0% { stroke-dasharray: 1000; stroke-dashoffset: 1000; }
+            100% { stroke-dashoffset: 0; }
+          }
+          
+          @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          
+          @keyframes spin-slow-reverse {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(-360deg); }
+          }
+          
+          @keyframes ping-slow {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            70%, 100% { transform: scale(1.5); opacity: 0; }
+          }
+          
+          .animate-float-slow {
+            animation: float-slow 15s ease-in-out infinite;
+          }
+          
+          .animate-float-slow-reverse {
+            animation: float-slow-reverse 18s ease-in-out infinite;
+          }
+          
+          .animate-pulse-slow {
+            animation: pulse-slow 4s ease-in-out infinite;
+          }
+          
+          .animate-spin-slow {
+            animation: spin-slow 20s linear infinite;
+          }
+          
+          .animate-spin-slow-reverse {
+            animation: spin-slow-reverse 25s linear infinite;
+          }
+          
+          .animate-ping-slow {
+            animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+          }
+          
+          .animate-draw-path {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: draw-path 10s linear forwards;
+          }
+          
+          .animate-draw-path-delay {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: draw-path 10s linear 1s forwards;
+          }
+          
+          .animate-draw-path-delay-2 {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: draw-path 10s linear 2s forwards;
+          }
+          
+          .animate-draw-path-delay-3 {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: draw-path 10s linear 3s forwards;
+          }
+          
+          .bg-scanlines {
+            background: repeating-linear-gradient(
+              to bottom,
+              transparent,
+              transparent 1px,
+              rgba(0, 0, 0, 0.05) 1px,
+              rgba(0, 0, 0, 0.05) 2px
+            );
+            background-size: 100% 4px;
+          }
+          
+          .dark .bg-scanlines {
+            background: repeating-linear-gradient(
+              to bottom,
+              transparent,
+              transparent 1px,
+              rgba(255, 255, 255, 0.05) 1px,
+              rgba(255, 255, 255, 0.05) 2px
+            );
+            background-size: 100% 4px;
+          }
+          
+          .glitch {
+            animation: glitch-skew 1s infinite linear alternate-reverse;
+          }
+          
+          @keyframes glitch-skew {
+            0% { transform: skew(0deg); }
+            20% { transform: skew(0deg); }
+            21% { transform: skew(3deg); }
+            23% { transform: skew(0deg); }
+            40% { transform: skew(-2deg); }
+            41% { transform: skew(0deg); }
+            100% { transform: skew(0deg); }
+          }
 
-        .dark .cube__face {
-          border: 1px solid rgba(0, 255, 255, 0.5);
-          background: rgba(0, 255, 255, 0.1);
-        }
+          .cube {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(-30deg) rotateY(45deg);
+            animation: cube-rotate 20s infinite linear;
+          }
 
-        .cube__face--front  { transform: rotateY(0deg) translateZ(8px); }
-        .cube__face--right  { transform: rotateY(90deg) translateZ(8px); }
-        .cube__face--back   { transform: rotateY(180deg) translateZ(8px); }
-        .cube__face--left   { transform: rotateY(-90deg) translateZ(8px); }
-        .cube__face--top    { transform: rotateX(90deg) translateZ(8px); }
-        .cube__face--bottom { transform: rotateX(-90deg) translateZ(8px); }
+          .cube__face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 1px solid rgba(138, 43, 226, 0.5);
+            background: rgba(138, 43, 226, 0.1);
+          }
 
-        @keyframes cube-rotate {
-          from { transform: rotateX(-30deg) rotateY(0deg); }
-          to { transform: rotateX(-30deg) rotateY(360deg); }
-        }
+          .dark .cube__face {
+            border: 1px solid rgba(0, 255, 255, 0.5);
+            background: rgba(0, 255, 255, 0.1);
+          }
 
-        .pyramid {
-          width: 100%;
-          height: 100%;
-          position: relative;
-          transform-style: preserve-3d;
-          transform: rotateX(-30deg) rotateY(45deg);
-          animation: pyramid-rotate 15s infinite linear reverse;
-        }
+          .cube__face--front  { transform: rotateY(0deg) translateZ(8px); }
+          .cube__face--right  { transform: rotateY(90deg) translateZ(8px); }
+          .cube__face--back   { transform: rotateY(180deg) translateZ(8px); }
+          .cube__face--left   { transform: rotateY(-90deg) translateZ(8px); }
+          .cube__face--top    { transform: rotateX(90deg) translateZ(8px); }
+          .cube__face--bottom { transform: rotateX(-90deg) translateZ(8px); }
 
-        .pyramid__face {
-          position: absolute;
-          width: 100%;
-          height: 100%;
-          border: 1px solid rgba(0, 200, 255, 0.5);
-          background: rgba(0, 200, 255, 0.1);
-        }
+          @keyframes cube-rotate {
+            from { transform: rotateX(-30deg) rotateY(0deg); }
+            to { transform: rotateX(-30deg) rotateY(360deg); }
+          }
 
-        .dark .pyramid__face {
-          border: 1px solid rgba(191, 0, 255, 0.5);
-          background: rgba(191, 0, 255, 0.1);
-        }
+          .pyramid {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transform: rotateX(-30deg) rotateY(45deg);
+            animation: pyramid-rotate 15s infinite linear reverse;
+          }
 
-        .pyramid__face--front {
-          transform: rotateY(0deg) rotateX(30deg) translateZ(0) translateY(-10px);
-          clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-        }
+          .pyramid__face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 1px solid rgba(0, 200, 255, 0.5);
+            background: rgba(0, 200, 255, 0.1);
+          }
 
-        .pyramid__face--right {
-          transform: rotateY(90deg) rotateX(30deg) translateZ(10px) translateY(-10px);
-          clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-        }
+          .dark .pyramid__face {
+            border: 1px solid rgba(191, 0, 255, 0.5);
+            background: rgba(191, 0, 255, 0.1);
+          }
 
-        .pyramid__face--left {
-          transform: rotateY(-90deg) rotateX(30deg) translateZ(10px) translateY(-10px);
-          clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-        }
+          .pyramid__face--front {
+            transform: rotateY(0deg) rotateX(30deg) translateZ(0) translateY(-10px);
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+          }
 
-        .pyramid__face--bottom {
-          transform: rotateX(-90deg) translateZ(10px) translateY(0);
-        }
+          .pyramid__face--right {
+            transform: rotateY(90deg) rotateX(30deg) translateZ(10px) translateY(-10px);
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+          }
 
-        @keyframes pyramid-rotate {
-          from { transform: rotateX(-20deg) rotateY(0deg); }
-          to { transform: rotateX(-20deg) rotateY(360deg); }
-        }
+          .pyramid__face--left {
+            transform: rotateY(-90deg) rotateX(30deg) translateZ(10px) translateY(-10px);
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+          }
 
-        .sphere {
-          width: 60px;
-          height: 60px;
-          border-radius: 50%;
-          background: radial-gradient(circle at 30% 30%, rgba(138, 43, 226, 0.4), rgba(0, 200, 255, 0.2));
-          box-shadow: 0 0 20px rgba(138, 43, 226, 0.3), inset 0 0 20px rgba(0, 200, 255, 0.2);
-        }
+          .pyramid__face--bottom {
+            transform: rotateX(-90deg) translateZ(10px) translateY(0);
+          }
 
-        .dark .sphere {
-          background: radial-gradient(circle at 30% 30%, rgba(191, 0, 255, 0.4), rgba(0, 255, 255, 0.2));
-          box-shadow: 0 0 20px rgba(191, 0, 255, 0.3), inset 0 0 20px rgba(0, 255, 255, 0.2);
-        }
+          @keyframes pyramid-rotate {
+            from { transform: rotateX(-20deg) rotateY(0deg); }
+            to { transform: rotateX(-20deg) rotateY(360deg); }
+          }
 
-        /* Digital Rain */
-        .digital-rain {
-          position: absolute;
-          top: -100px;
-          font-family: monospace;
-          color: rgba(138, 43, 226, 0.5);
-          text-shadow: 0 0 5px rgba(138, 43, 226, 0.5);
-          animation: digital-rain-fall linear infinite;
-        }
+          .sphere {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(138, 43, 226, 0.4), rgba(0, 200, 255, 0.2));
+            box-shadow: 0 0 20px rgba(138, 43, 226, 0.3), inset 0 0 20px rgba(0, 200, 255, 0.2);
+          }
 
-        .dark .digital-rain {
-          color: rgba(0, 255, 255, 0.5);
-          text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
-        }
+          .dark .sphere {
+            background: radial-gradient(circle at 30% 30%, rgba(191, 0, 255, 0.4), rgba(0, 255, 255, 0.2));
+            box-shadow: 0 0 20px rgba(191, 0, 255, 0.3), inset 0 0 20px rgba(0, 255, 255, 0.2);
+          }
 
-        .digital-rain__char {
-          font-size: 14px;
-          line-height: 1;
-          opacity: 0;
-          animation: digital-rain-fade 2s linear infinite;
-        }
+          .digital-rain {
+            position: absolute;
+            top: -100px;
+            font-family: monospace;
+            color: rgba(138, 43, 226, 0.5);
+            text-shadow: 0 0 5px rgba(138, 43, 226, 0.5);
+            animation: digital-rain-fall linear infinite;
+          }
 
-        @keyframes digital-rain-fall {
-          to { transform: translateY(calc(100vh + 100px)); }
-        }
+          .dark .digital-rain {
+            color: rgba(0, 255, 255, 0.5);
+            text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+          }
 
-        @keyframes digital-rain-fade {
-          0%, 100% { opacity: 0; }
-          50% { opacity: 1; }
-        }
+          .digital-rain__char {
+            font-size: 14px;
+            line-height: 1;
+            opacity: 0;
+            animation: digital-rain-fade 2s linear infinite;
+          }
 
-        /* Nodes and Connections */
-        .node {
-          fill: rgba(138, 43, 226, 0.7);
-          filter: url(#glow);
-          animation: node-pulse 4s ease-in-out infinite alternate;
-        }
+          @keyframes digital-rain-fall {
+            to { transform: translateY(calc(100vh + 100px)); }
+          }
 
-        .dark .node {
-          fill: rgba(0, 255, 255, 0.7);
-        }
+          @keyframes digital-rain-fade {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+          }
 
-        .connection {
-          stroke: rgba(138, 43, 226, 0.3);
-          stroke-width: 0.5;
-          stroke-dasharray: 5,5;
-          animation: connection-dash 20s linear infinite;
-        }
+          .node {
+            fill: rgba(138, 43, 226, 0.7);
+            filter: url(#glow);
+            animation: node-pulse 4s ease-in-out infinite alternate;
+          }
 
-        .dark .connection {
-          stroke: rgba(0, 255, 255, 0.3);
-        }
+          .dark .node {
+            fill: rgba(0, 255, 255, 0.7);
+          }
 
-        @keyframes node-pulse {
-          0%, 100% { r: 2; opacity: 0.7; }
-          50% { r: 3; opacity: 1; }
-        }
+          .connection {
+            stroke: rgba(138, 43, 226, 0.3);
+            stroke-width: 0.5;
+            stroke-dasharray: 5,5;
+            animation: connection-dash 20s linear infinite;
+          }
 
-        @keyframes connection-dash {
-          to { stroke-dashoffset: 1000; }
-        }
-      `}</style>
-    </div>
-  )
+          .dark .connection {
+            stroke: rgba(0, 255, 255, 0.3);
+          }
+
+          @keyframes node-pulse {
+            0%, 100% { r: 2; opacity: 0.7; }
+            50% { r: 3; opacity: 1; }
+          }
+
+          @keyframes connection-dash {
+            to { stroke-dashoffset: 1000; }
+          }
+        `}</style>
+      </div>
+    )
+  }
+
+  return null
 }

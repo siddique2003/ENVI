@@ -4,16 +4,29 @@ const nextConfig = {
   swcMinify: true,
   async rewrites() {
     return [
-      // Add specific rule first to ensure it's matched
+      // Only proxy specific Django API routes
       {
-        source: '/api/generate-charts/', // Match the exact path WITH the slash
-        destination: 'http://127.0.0.1:8000/api/generate-charts/', // Proxy to the exact path WITH the slash
+        source: '/api/upload-csv/',
+        destination: 'http://127.0.0.1:8000/api/upload-csv/',
       },
-      // Keep the general rule for other API paths
       {
-        source: '/api/:path*', 
-        destination: 'http://127.0.0.1:8000/api/:path*', 
+        source: '/api/generate-charts', 
+        destination: 'http://127.0.0.1:8000/api/generate-charts',
       },
+      {
+        source: '/api/test-hypotheses/',
+        destination: 'http://127.0.0.1:8000/api/test-hypotheses/',
+      },
+      {
+        source: '/api/preview-data/',
+        destination: 'http://127.0.0.1:8000/api/preview-data/',
+      },
+      {
+        source: '/api/recommend-fields/',
+        destination: 'http://127.0.0.1:8000/api/recommend-fields/',
+      },
+      // DO NOT add a general /api/:path* rewrite here
+      // Requests to /api/auth/* should be handled by Next.js
     ];
   },
 }

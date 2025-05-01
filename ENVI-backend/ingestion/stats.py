@@ -13,6 +13,7 @@ from scipy.stats import ttest_ind, chi2_contingency, pearsonr, f_oneway
 from pandas.api.types import is_numeric_dtype, is_datetime64_any_dtype, is_categorical_dtype, is_object_dtype
 from .utils import clean_column_name
 
+
 # Attempt to import statsmodels, but don't fail if it's not installed yet
 try:
     import statsmodels.api as sm
@@ -119,8 +120,7 @@ def plot_column_chart(df, field1, field2):
     try:
         return {
             "x": df[field2].tolist(),
-            "y": df[field1].tolist(),
-            "title": f"Column Chart: {field1} vs {field2}",
+            "title": f"{field1} vs {field2}",
             "type": "bar",
             "xKey": field2,
             "yKey": field1
@@ -241,7 +241,15 @@ def run_stats_module(field1, field2):
 
     # Fetch all data initially
     df = create_dataframe() # Gets all columns, already cleaned and lowercased
+    if "order_id" in df.columns:
+        df = df.drop(columns=["order_id"])
+    all_charts = []
+    
 
+    forced = select_best_chart(df, field1_clean, field2_clean)
+    if forced:
+         # give it top priority so it fills your first “best_chart” slot
+         all_charts.insert(0, {"score": float("inf"), "data": forced})
     if df.empty:
         return {"error": "No data available to analyze."}
 
@@ -290,10 +298,10 @@ def run_stats_module(field1, field2):
              return {"error": "Could not identify a numerical field to focus on. Please select at least one numerical field."}
 
     # --- Generate ALL potential charts with scores ---
-    all_charts = []
     used_pairs = set()
 
-    for col1 in df.columns:
+    cols = [c for c in df.columns if c != "order_id"]
+    for col1 in cols:
         for col2 in df.columns:
             if col1 == col2 or (col1, col2) in used_pairs or (col2, col1) in used_pairs:
                 continue

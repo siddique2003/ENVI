@@ -61,6 +61,7 @@ import { Resizable } from "re-resizable"
 import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd"
 import type { DropResult } from "@hello-pangea/dnd"
 import type { DraggableProvided, DroppableProvided } from "@hello-pangea/dnd"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface ColumnInfo {
   name: string
@@ -830,7 +831,7 @@ export default function Visualization() {
   const [columnInfo, setColumnInfo] = useState<ColumnInfo[]>([])
   const [selectedChartInstanceId, setSelectedChartInstanceId] = useState<number | null>(null)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
-  const dashboardRef = useRef<HTMLDivElement>(null) // Initialize here
+  const [dashboardRef] = useState(useRef<HTMLDivElement>(null)) // Initialize here
 
   // All useEffect hooks must be at the top level
   useEffect(() => {
@@ -957,8 +958,11 @@ export default function Visualization() {
     return {
       id: key,
       type: chart.type as ChartType["type"],
-      title: chart.title || key.replace(/_/g, " "),
-      xKey: xKey, // Use backend provided xKey directly
+      title: chart.title
+        ? // remove trailing " (ANOVA)" (with any whitespace in front), case-insensitive
+          chart.title.replace(/\s*$$ANOVA$$$/i, "")
+        : key.replace(/_/g, " "),
+      xKey: xKey, // Use backend provided xKey directl
       yKey: yKey, // Use backend provided yKey directly (can be null)
       xData: chart.x,
       yData: chart.y,
@@ -1376,6 +1380,7 @@ export default function Visualization() {
     chart: ProcessedChart,
     handleChartTypeChange: (instanceId: number, newType: ChartType["type"]) => void,
   ) => {
+    const displayTitle = chart.title.replace(/^Column Chart:\s*/i, "")
     const { theme } = useTheme()
     const data = processChartData(chart, chart.type === "treemap") // Pass treemap flag
     const textColor = resolvedTheme === "dark" ? "#fff" : "#000"
@@ -1420,7 +1425,7 @@ export default function Visualization() {
           <div className="flex items-center gap-2 flex-1 flex-shrink min-w-0 mr-2">
             <span className="text-cyan-500 dark:text-fuchsia-500 flex-shrink-0">{chart.icon}</span>
             <EditableTitle
-              initialTitle={chart.title}
+              initialTitle={displayTitle}
               onSave={(newTitle) => handleChartTitleEdit(chart.instanceId, newTitle)}
             />
           </div>
@@ -1456,35 +1461,8 @@ export default function Visualization() {
         </div>
 
         {/* Chart Body */}
-        <div className="flex-grow p-2 overflow-hidden relative z-10">
+        <div className="flex-grow p-2 overflow-visible relative z-10">
           <ResponsiveContainer width="100%" height="100%">
-            <defs>
-              <linearGradient id="cyan-purple-gradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#00DDFF" stopOpacity={0.9} />
-                <stop offset="95%" stopColor="#AA55FF" stopOpacity={0.9} />
-              </linearGradient>
-              <linearGradient id="purple-blue-gradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#AA55FF" stopOpacity={0.9} />
-                <stop offset="95%" stopColor="#08F7FE" stopOpacity={0.9} />
-              </linearGradient>
-              <linearGradient id="cyan-blue-gradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#00FFFF" stopOpacity={0.9} />
-                <stop offset="95%" stopColor="#0088FF" stopOpacity={0.9} />
-              </linearGradient>
-              <linearGradient id="blue-purple-gradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#08F7FE" stopOpacity={0.9} />
-                <stop offset="95%" stopColor="#5E17EB" stopOpacity={0.9} />
-              </linearGradient>
-              <radialGradient id="cyan-radial" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-                <stop offset="0%" stopColor="#00FFFF" stopOpacity={0.9} />
-                <stop offset="100%" stopColor="#00DDFF" stopOpacity={0.7} />
-              </radialGradient>
-              <radialGradient id="purple-radial" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-                <stop offset="0%" stopColor="#AA55FF" stopOpacity={0.9} />
-                <stop offset="100%" stopColor="#5E17EB" stopOpacity={0.7} />
-              </radialGradient>
-            </defs>
-
             {/* Conditional Rendering Logic based on chart.type */}
             {chart.type === "scorecard" &&
               (() => {
@@ -1501,30 +1479,101 @@ export default function Visualization() {
                 )
               })()}
 
-            {chart.type === "bar" && Array.isArray(data) && data.length > 0 && (
-              <RechartsBarChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                <XAxis dataKey={chart.xKey} stroke={textColor} fontSize={10} tick={{ fill: textColor }} />
-                <YAxis stroke={textColor} fontSize={10} tick={{ fill: textColor }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: resolvedTheme === "dark" ? "#1F2937" : "#FFFFFF",
-                    border: "1px solid #4B5563",
-                  }}
-                  itemStyle={{ color: resolvedTheme === "dark" ? "#D1D5DB" : "#1F2937" }}
-                />
-                <Bar dataKey={chart.yKey} fill={chart.color || "url(#cyan-purple-gradient)"} radius={[4, 4, 0, 0]}>
-                  {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={getColor(index % chartColorPalette.length)} />
-                  ))}
-                </Bar>
-              </RechartsBarChart>
-            )}
+            {chart.type === "bar" &&
+              Array.isArray(data) &&
+              data.length > 0 &&
+              (() => {
+                // 1) Make a sorted copy
+                const sorted = [...data].sort((a, b) => (b[chart.yKey!] as number) - (a[chart.yKey!] as number))
+
+                return (
+                  <RechartsBarChart
+                    data={sorted}
+                    // 2) bump bottom margin so rotated labels aren’t cut
+                    margin={{ top: 5, right: 5, left: 5, bottom: 10 }}
+                  >
+                    <defs>
+                      <linearGradient id="cyan-purple-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#00DDFF" stopOpacity={0.9} />
+                        <stop offset="95%" stopoffset="95%" stopColor="#AA55FF" stopOpacity={0.9} />
+                      </linearGradient>
+                      <linearGradient id="purple-blue-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#AA55FF" stopOpacity={0.9} />
+                        <stop offset="95%" stopColor="#08F7FE" stopOpacity={0.9} />
+                      </linearGradient>
+                      <linearGradient id="cyan-blue-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#00FFFF" stopOpacity={0.9} />
+                        <stop offset="95%" stopColor="#0088FF" stopOpacity={0.9} />
+                      </linearGradient>
+                      <linearGradient id="blue-purple-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#08F7FE" stopOpacity={0.9} />
+                        <stop offset="95%" stopColor="#5E17EB" stopOpacity={0.9} />
+                      </linearGradient>
+                      <radialGradient id="cyan-radial" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                        <stop offset="0%" stopColor="#00FFFF" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#00DDFF" stopOpacity={0.7} />
+                      </radialGradient>
+                      <radialGradient id="purple-radial" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                        <stop offset="0%" stopColor="#AA55FF" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#5E17EB" stopOpacity={0.7} />
+                      </radialGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+
+                    <XAxis
+                      dataKey={chart.xKey}
+                      stroke={textColor}
+                      fontSize={10}
+                      tick={{ fill: textColor }}
+                      // 3) force every tick, rotate them
+                      interval={0}
+                      angle={-45}
+                      textAnchor="end"
+                      // height to accommodate the slanted labels
+                      height={60}
+                    />
+
+                    <YAxis stroke={textColor} fontSize={10} tick={{ fill: textColor }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: resolvedTheme === "dark" ? "#1F2937" : "#FFFFFF",
+                        border: "1px solid #4B5563",
+                      }}
+                      itemStyle={{ color: resolvedTheme === "dark" ? "#D1D5DB" : "#1F2937" }}
+                    />
+
+                    <Bar
+                      dataKey={chart.yKey}
+                      fill={chart.color || "url(#cyan-purple-gradient)"}
+                      radius={[4, 4, 0, 0]}
+                      minPointSize={2}
+                    >
+                      {/* 4) map over the sorted array, not the old data */}
+                      {sorted.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={getColor(index)} />
+                      ))}
+                    </Bar>
+                  </RechartsBarChart>
+                )
+              })()}
 
             {chart.type === "line" && Array.isArray(data) && data.length > 0 && (
-              <RechartsLineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+              <RechartsLineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                <XAxis dataKey={chart.xKey} stroke={textColor} fontSize={10} tick={{ fill: textColor }} />
+                <XAxis
+                  dataKey={chart.xKey}
+                  stroke={textColor}
+                  tick={{ fill: textColor, fontSize: 10 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  tickFormatter={(val) =>
+                    new Date(val).toLocaleDateString(undefined, {
+                      year: "numeric",
+                      month: "short",
+                    })
+                  }
+                />
                 <YAxis stroke={textColor} fontSize={10} tick={{ fill: textColor }} />
                 <Tooltip
                   contentStyle={{
@@ -1536,10 +1585,12 @@ export default function Visualization() {
                 <Line
                   type="monotone"
                   dataKey={chart.yKey}
-                  stroke={chart.color || "#00DDFF"}
+                  // if chart.color is a gradient URL, use a solid fallback
+                  stroke={chart.color?.startsWith("url(") ? "#00DDFF" : chart.color}
                   strokeWidth={2}
                   dot={{ r: 4, fill: "#5E17EB", stroke: "#00DDFF" }}
                   activeDot={{ r: 6, fill: "#5E17EB", stroke: "#00DDFF" }}
+                  connectNulls={true} // (optional) will bridge any null gaps
                 />
               </RechartsLineChart>
             )}
@@ -1822,14 +1873,17 @@ export default function Visualization() {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="px-6 py-4 flex justify-between items-center"
             >
-              <Button
-                onClick={handleLogout}
-                variant="ghost"
-                className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
-              </Button>
+              <div className="flex items-center gap-4">
+                <Button
+                  onClick={handleLogout}
+                  variant="ghost"
+                  className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </Button>
+                <ThemeToggle />
+              </div>
 
               <Button
                 onClick={handleExport}
@@ -1966,7 +2020,7 @@ export default function Visualization() {
                                 >
                                   <motion.div
                                     {...prov.dragHandleProps}
-                                    className={`rounded-xl group transition-colors h-full w-full overflow-hidden ${
+                                    className={`rounded-xl group transition-colors h-full w-full overflow-visible ${
                                       selectedChartInstanceId === chart.instanceId
                                         ? "ring-2 ring-cyan-500 dark:ring-fuchsia-500"
                                         : ""
@@ -2098,6 +2152,10 @@ export default function Visualization() {
         .glitch-active {
           animation: glitch 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
           position: relative;
+        }
+        
+        .glitch-active::before,
+        .glitch-          position: relative;
         }
         
         .glitch-active::before,

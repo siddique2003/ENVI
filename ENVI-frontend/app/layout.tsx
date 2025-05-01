@@ -2,9 +2,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import type { ReactNode } from "react"
 import type { Metadata } from "next"
-import { ThemeProvider } from "@/components/theme-provider"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { LoadingProvider } from "@/lib/contexts/loading-context"
+import { Providers } from "@/components/providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -21,12 +19,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider defaultTheme="dark" enableSystem={false} disableTransitionOnChange={false}>
-          <LoadingProvider>
-            <ThemeToggle />
-            {children}
-          </LoadingProvider>
-        </ThemeProvider>
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   )

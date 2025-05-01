@@ -12,6 +12,7 @@ import { useTheme } from "next-themes"
 import { ArrowLeft, LogOut, ChevronRight, Database, BarChart, LineChart, PieChart } from "lucide-react"
 import { getCookie } from "cookies-next"
 import { motion } from "framer-motion"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 function cleanFieldName(field: string) {
   return field
@@ -37,6 +38,7 @@ export default function SelectFieldsPage() {
   const [isHoveringY, setIsHoveringY] = useState(false)
   const [isHoveringButton, setIsHoveringButton] = useState(false)
   const [glitchActive, setGlitchActive] = useState(false)
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(false)
 
   // Refs for animations
   const containerRef = useRef<HTMLDivElement>(null)
@@ -104,6 +106,7 @@ export default function SelectFieldsPage() {
     const cleanedY = cleanFieldName(yField)
 
     setLoading(true)
+    setShowLoadingOverlay(true) // Show the loading overlay
     setError(null)
     try {
       const response = await fetch("/api/generate-charts/", {
@@ -152,6 +155,7 @@ export default function SelectFieldsPage() {
       const dataToStore = {
         original_data: previewData,
         charts: result.charts,
+        isLoading: true, // Add loading state to localStorage
       }
 
       localStorage.setItem("visualizationData", JSON.stringify(dataToStore))
@@ -162,8 +166,10 @@ export default function SelectFieldsPage() {
       console.error("Error generating charts:", err)
       alert("Error generating charts")
       setError(err.message)
+      setShowLoadingOverlay(false) // Hide loading overlay on error
     } finally {
       setLoading(false)
+      // Note: We don't hide the loading overlay here because we want it to persist during navigation
     }
   }
 
@@ -245,17 +251,19 @@ export default function SelectFieldsPage() {
             </Button>
           </motion.div>
 
-          <motion.div initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5 }}>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-1 text-red-400 hover:text-red-300 hover:bg-red-900/30 group relative overflow-hidden"
-              onClick={handleLogout}
-            >
-              <span>Logout</span>
-              <LogOut size={16} className="group-hover:translate-x-1 transition-transform" />
-              <div className="absolute bottom-0 left-0 h-[1px] w-0 bg-gradient-to-r from-red-500 to-orange-500 group-hover:w-full transition-all duration-300"></div>
-            </Button>
-          </motion.div>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            <motion.div initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5 }}>
+              <Button
+                variant="outline"
+                className="flex items-center gap-2 text-gray-600 hover:text-red-500 dark:text-gray-300 dark:hover:text-red-400 transition-colors border border-gray-300 dark:border-gray-700 hover:border-red-500 dark:hover:border-red-400"
+                onClick={handleLogout}
+              >
+                <LogOut size={16} />
+                <span>Logout</span>
+              </Button>
+            </motion.div>
+          </div>
         </div>
 
         <motion.div
@@ -474,125 +482,102 @@ export default function SelectFieldsPage() {
           </motion.div>
         </div>
 
-        {/* Data preview section */}
-        {!loading && previewData.length > 0 && (
+        {/* Loading Overlay */}
+        {showLoadingOverlay && (
           <motion.div
-            initial={{ y: 30, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.6 }}
-            className="mt-8"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center"
           >
-            <Card className="bg-white/80 dark:bg-black/40 p-6 border border-gray-200 dark:border-purple-500/20 backdrop-blur-sm relative overflow-hidden">
-              <div className="absolute -top-2 -left-2 w-8 h-8 border-t-2 border-l-2 border-cyan-500/40"></div>
-              <h2 className="text-xl font-semibold mb-4 text-purple-700 dark:text-purple-300">Data Preview</h2>
-
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-purple-100/50 dark:bg-purple-900/30 border-b border-purple-300/30 dark:border-purple-500/30">
-                      {Object.keys(previewData[0]).map((key) => (
-                        <th
-                          key={key}
-                          className="py-2 px-3 text-left text-sm font-medium text-cyan-700 dark:text-cyan-300"
-                        >
-                          {key}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewData.slice(0, 5).map((row, i) => (
-                      <tr
-                        key={i}
-                        className="border-b border-purple-300/10 dark:border-purple-500/10 hover:bg-purple-100/10 dark:hover:bg-purple-900/10 transition-colors"
-                      >
-                        {Object.values(row).map((value: any, j) => (
-                          <td key={j} className="py-2 px-3 text-sm">
-                            {typeof value === "object" ? JSON.stringify(value) : String(value)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="relative w-40 h-40">
+              <div className="absolute inset-0 rounded-full border-t-4 border-b-4 border-purple-500 animate-spin"></div>
+              <div className="absolute inset-2 rounded-full border-r-4 border-l-4 border-cyan-500 animate-spin-reverse"></div>
+              <div
+                className="absolute inset-4 rounded-full border-t-4 border-b-4 border-pink-500 animate-spin"
+                style={{ animationDuration: "3s" }}
+              ></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-20 h-20 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-600 via-cyan-500 to-pink-500 animate-pulse"></div>
+                </div>
               </div>
-
-              {previewData.length > 5 && (
-                <p className="text-gray-400 text-sm mt-3">Showing 5 of {previewData.length} records</p>
-              )}
-
-              {/* Circuit decoration */}
-              <div className="absolute bottom-0 right-0 w-40 h-40 opacity-20 pointer-events-none">
-                <svg viewBox="0 0 100 100" className="w-full h-full">
-                  <path
-                    d="M100,50 L80,50 L80,80 L20,80 L20,20 L50,20 L50,0"
-                    stroke="cyan"
-                    strokeWidth="0.5"
-                    fill="none"
-                  />
-                  <path d="M100,80 L70,80 L70,30 L40,30 L40,0" stroke="purple" strokeWidth="0.5" fill="none" />
-                  <circle cx="80" cy="50" r="2" fill="cyan" />
-                  <circle cx="70" cy="30" r="2" fill="purple" />
-                  <circle cx="20" cy="80" r="2" fill="cyan" />
-                </svg>
-              </div>
-            </Card>
+            </div>
+            <div className="mt-8 text-white text-xl font-bold">Generating Visualizations</div>
+            <div className="mt-2 text-gray-300 text-sm">Please wait while we process your data...</div>
+            <div className="mt-4 flex space-x-2">
+              <div className="w-3 h-3 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: "0s" }}></div>
+              <div className="w-3 h-3 rounded-full bg-cyan-500 animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+              <div className="w-3 h-3 rounded-full bg-pink-500 animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+            </div>
           </motion.div>
         )}
+
+        {/* Add CSS for animations */}
+        <style jsx global>{`
+          @keyframes data-stream {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+          
+          @keyframes spin-reverse {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(-360deg); }
+          }
+
+          .animate-spin-reverse {
+            animation: spin-reverse 2s linear infinite;
+          }
+
+          .animate-data-stream {
+            animation: data-stream 3s linear infinite;
+          }
+          
+          .bg-grid-small-white {
+            background-size: 20px 20px;
+            background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+          }
+
+          .bg-grid-small-black {
+            background-size: 20px 20px;
+            background-image: radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px);
+          }
+          
+          .bg-scanlines {
+            background: linear-gradient(
+              to bottom,
+              transparent 50%,
+              rgba(255, 255, 255, 0.05) 50%
+            );
+            background-size: 100% 4px;
+          }
+          
+          @keyframes border-flow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+          }
+          
+          .animate-border-flow {
+            animation: border-flow 2s ease infinite;
+          }
+          
+          @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+          }
+          
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+          }
+          
+          .animate-glitch {
+            animation: glitch 0.2s ease;
+          }
+        `}</style>
       </div>
-
-      {/* Add CSS for animations */}
-      <style jsx global>{`
-        @keyframes data-stream {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        
-        .animate-data-stream {
-          animation: data-stream 3s linear infinite;
-        }
-        
-        .bg-grid-small-white {
-          background-size: 20px 20px;
-          background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-        }
-
-        .bg-grid-small-black {
-          background-size: 20px 20px;
-          background-image: radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px);
-        }
-        
-        .bg-scanlines {
-          background: linear-gradient(
-            to bottom,
-            transparent 50%,
-            rgba(255, 255, 255, 0.05) 50%
-          );
-          background-size: 100% 4px;
-        }
-        
-        @keyframes border-flow {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
-        }
-        
-        .animate-border-flow {
-          animation: border-flow 2s ease infinite;
-        }
-        
-        @keyframes glitch {
-          0% { transform: translate(0); }
-          20% { transform: translate(-2px, 2px); }
-          40% { transform: translate(-2px, -2px); }
-          60% { transform: translate(2px, 2px); }
-          80% { transform: translate(2px, -2px); }
-          100% { transform: translate(0); }
-        }
-        
-        .animate-glitch {
-          animation: glitch 0.2s ease;
-        }
-      `}</style>
     </div>
   )
 }

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useTheme } from "next-themes"
 import { SparklesCore } from "@/components/sparkles"
-import { ArrowLeft, LogOut, FlaskConical, ChevronRight, Database, LineChart, BarChart2 } from 'lucide-react'
+import { ArrowLeft, LogOut, FlaskConical, ChevronRight, Database, LineChart, BarChart2 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export default function HypothesisTestingPage() {
   const router = useRouter()
@@ -118,7 +119,7 @@ export default function HypothesisTestingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           field1: fieldMap[field1],
-          field2: fieldMap[field2]
+          field2: fieldMap[field2],
         }),
       })
 
@@ -129,10 +130,10 @@ export default function HypothesisTestingPage() {
 
       const data = await res.json()
       setResult(data)
-      
+
       // Scroll to results after a short delay
       setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
       }, 200)
     } catch (e: any) {
       setResult({ error: e.message || "Something went wrong" })
@@ -155,6 +156,26 @@ export default function HypothesisTestingPage() {
   }
 
   const handleManualVisualization = () => {
+    // grab whatever preview we already have in storage
+    const saved = localStorage.getItem("visualizationData")
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      // full preview array (your CSV rows)
+      const preview: any[] = parsed.preview || parsed.original_data || []
+      // cleaned column names from your fieldMap state
+      const cleaned_columns: string[] = Object.keys(fieldMap)
+      // build up a little column_types array so viz knows which are numerical vs categorical
+      const column_types = cleaned_columns.map((name) => ({
+        name,
+        type:
+          typeof (preview[0]?.[fieldMap[name]] ?? preview[0]?.[name]) === "number"
+            ? ("numerical" as const)
+            : ("categorical" as const),
+      }))
+
+      localStorage.setItem("visualizationData", JSON.stringify({ cleaned_columns, preview, column_types }))
+    }
+
     router.push("/visualization")
   }
 
@@ -255,11 +276,7 @@ export default function HypothesisTestingPage() {
 
       <div className="relative z-10 container mx-auto px-4 py-10">
         <div className="flex justify-between items-center mb-6">
-          <motion.div
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.5 }}
-          >
+          <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5 }}>
             <Button
               variant="ghost"
               className="flex items-center gap-1 text-purple-600 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/30"
@@ -269,19 +286,19 @@ export default function HypothesisTestingPage() {
             </Button>
           </motion.div>
 
-          <motion.div
-            initial={{ x: 20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Button
-              variant="ghost"
-              className="flex items-center gap-1 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
-              onClick={handleLogout}
-            >
-              <LogOut size={16} /> Logout
-            </Button>
-          </motion.div>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5 }}>
+              <Button
+                variant="outline"
+                className="flex items-center gap-2 text-gray-600 hover:text-red-500 dark:text-gray-300 dark:hover:text-red-400 transition-colors border border-gray-300 dark:border-gray-700 hover:border-red-500 dark:hover:border-red-400"
+                onClick={handleLogout}
+              >
+                <LogOut size={16} />
+                <span>Logout</span>
+              </Button>
+            </motion.div>
+          </div>
         </div>
 
         <motion.div
@@ -344,7 +361,7 @@ export default function HypothesisTestingPage() {
             )}
 
             <div className="flex flex-wrap gap-6 mb-6">
-              <motion.div 
+              <motion.div
                 className="flex-1 min-w-[200px]"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -362,22 +379,22 @@ export default function HypothesisTestingPage() {
                   >
                     <option value="">-- Select --</option>
                     {fields.map((f) => {
-                      const rawField = fieldMap[f];
-                      const sampleValue = previewData?.[0]?.[rawField];
-                      const isNumeric = typeof sampleValue === "number";
+                      const rawField = fieldMap[f]
+                      const sampleValue = previewData?.[0]?.[rawField]
+                      const isNumeric = typeof sampleValue === "number"
 
                       return (
                         <option key={f} value={f}>
                           {label(f)} {isNumeric ? "(Numerical)" : "(Categorical)"}
                         </option>
-                      );
+                      )
                     })}
                   </select>
                   <div className="absolute bottom-0 left-0 h-0.5 w-full bg-gradient-to-r from-purple-500/50 to-cyan-500/50 transform scale-x-0 group-focus-within:scale-x-100 transition-transform origin-left"></div>
                 </div>
               </motion.div>
 
-              <motion.div 
+              <motion.div
                 className="flex-1 min-w-[200px]"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -395,22 +412,22 @@ export default function HypothesisTestingPage() {
                   >
                     <option value="">-- Select --</option>
                     {fields.map((f) => {
-                      const rawField = fieldMap[f];
-                      const sampleValue = previewData?.[0]?.[rawField];
-                      const isNumeric = typeof sampleValue === "number";
+                      const rawField = fieldMap[f]
+                      const sampleValue = previewData?.[0]?.[rawField]
+                      const isNumeric = typeof sampleValue === "number"
 
                       return (
                         <option key={f} value={f}>
                           {label(f)} {isNumeric ? "(Numerical)" : "(Categorical)"}
                         </option>
-                      );
+                      )
                     })}
                   </select>
                   <div className="absolute bottom-0 left-0 h-0.5 w-full bg-gradient-to-r from-purple-500/50 to-cyan-500/50 transform scale-x-0 group-focus-within:scale-x-100 transition-transform origin-left"></div>
                 </div>
               </motion.div>
 
-              <motion.div 
+              <motion.div
                 className="flex items-end"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -489,7 +506,9 @@ export default function HypothesisTestingPage() {
                     {result.p_value < 0.05 ? (
                       <div className="mt-2 space-y-2">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white">✓</div>
+                          <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white">
+                            ✓
+                          </div>
                           <p className="font-medium">
                             A <em>statistically significant</em> relationship exists (p = {result.p_value}) between{" "}
                             <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span> and{" "}
@@ -498,20 +517,23 @@ export default function HypothesisTestingPage() {
                         </div>
                         <div className="ml-8 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/30 rounded-lg">
                           <p className="italic text-gray-700 dark:text-gray-300">
-                            <strong className="text-green-700 dark:text-green-400">Business Insight:</strong> This suggests that changes in{" "}
-                            <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span> meaningfully affect{" "}
-                            <span className="text-purple-600 dark:text-purple-400">{label(field2)}</span>. If{" "}
-                            <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span> represents time (like
-                            Year or Month), this insight can drive forecasting models and time-based KPIs. If it's categorical
-                            (like Region or Product Line), consider segment-specific strategies to optimize{" "}
-                            <span className="text-purple-600 dark:text-purple-400">{label(field2)}</span>.
+                            <strong className="text-green-700 dark:text-green-400">Business Insight:</strong> This
+                            suggests that changes in{" "}
+                            <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span> meaningfully
+                            affect <span className="text-purple-600 dark:text-purple-400">{label(field2)}</span>. If{" "}
+                            <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span> represents
+                            time (like Year or Month), this insight can drive forecasting models and time-based KPIs. If
+                            it's categorical (like Region or Product Line), consider segment-specific strategies to
+                            optimize <span className="text-purple-600 dark:text-purple-400">{label(field2)}</span>.
                           </p>
                         </div>
                       </div>
                     ) : (
                       <div className="mt-2 space-y-2">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white">✕</div>
+                          <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white">
+                            ✕
+                          </div>
                           <p className="font-medium">
                             There is <em>no statistically significant</em> relationship (p = {result.p_value}) between{" "}
                             <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span> and{" "}
@@ -520,12 +542,13 @@ export default function HypothesisTestingPage() {
                         </div>
                         <div className="ml-8 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/30 rounded-lg">
                           <p className="italic text-gray-700 dark:text-gray-300">
-                            <strong className="text-red-700 dark:text-red-400">Business Insight:</strong> The variation in{" "}
-                            <span className="text-purple-600 dark:text-purple-400">{label(field2)}</span> is likely not explained
-                            by <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span>. Consider focusing
-                            your analysis on stronger predictors and exclude{" "}
-                            <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span> from priority models or
-                            business decisions.
+                            <strong className="text-red-700 dark:text-red-400">Business Insight:</strong> The variation
+                            in <span className="text-purple-600 dark:text-purple-400">{label(field2)}</span> is likely
+                            not explained by{" "}
+                            <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span>. Consider
+                            focusing your analysis on stronger predictors and exclude{" "}
+                            <span className="text-purple-600 dark:text-purple-400">{label(field1)}</span> from priority
+                            models or business decisions.
                           </p>
                         </div>
                       </div>
@@ -563,9 +586,7 @@ export default function HypothesisTestingPage() {
                         <div className="w-8 h-8 rounded-full bg-purple-500/20 dark:bg-purple-600/20 flex items-center justify-center">
                           <FlaskConical className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                         </div>
-                        <p className="text-lg font-semibold text-purple-700 dark:text-purple-300">
-                          {test.test}
-                        </p>
+                        <p className="text-lg font-semibold text-purple-700 dark:text-purple-300">{test.test}</p>
                       </div>
 
                       {test.error ? (
@@ -611,7 +632,7 @@ export default function HypothesisTestingPage() {
                 </div>
                 <h2 className="text-xl font-semibold text-purple-600 dark:text-purple-300">Data Preview</h2>
               </div>
-              
+
               <div className="relative overflow-x-auto rounded-lg border border-gray-200 dark:border-purple-500/10">
                 <table className="min-w-full text-left table-auto">
                   <thead className="bg-gray-100/80 dark:bg-black/50 transition-colors">
@@ -628,8 +649,8 @@ export default function HypothesisTestingPage() {
                   </thead>
                   <tbody>
                     {previewData.map((row, idx) => (
-                      <motion.tr 
-                        key={idx} 
+                      <motion.tr
+                        key={idx}
                         className="hover:bg-gray-50 dark:hover:bg-black/30 transition-colors"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -684,7 +705,7 @@ export default function HypothesisTestingPage() {
                     <div>
                       <h3 className="text-2xl font-bold text-white mb-2">Automated Visualization</h3>
                       <p className="text-white/80 mb-6">
-                        Let AI analyze your data and generate optimized visualizations based on your selected fields.
+                        Let us analyze your data and generate optimized visualizations based on your selected fields.
                       </p>
                     </div>
 
@@ -698,7 +719,12 @@ export default function HypothesisTestingPage() {
                           viewBox="0 0 24 24"
                           stroke="currentColor"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M14 5l7 7m0 0l-7 7m7-7H3"
+                          />
                         </svg>
                       </div>
                     </div>
@@ -725,7 +751,8 @@ export default function HypothesisTestingPage() {
                     <div>
                       <h3 className="text-2xl font-bold text-white mb-2">Manual Visualization</h3>
                       <p className="text-white/80 mb-6">
-                        Take full control of your data visualization with a drag-and-drop interface and customizable charts.
+                        Take full control of your data visualization with a drag-and-drop interface and customizable
+                        charts.
                       </p>
                     </div>
 
@@ -739,7 +766,12 @@ export default function HypothesisTestingPage() {
                           viewBox="0 0 24 24"
                           stroke="currentColor"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M14 5l7 7m0 0l-7 7m7-7H3"
+                          />
                         </svg>
                       </div>
                     </div>

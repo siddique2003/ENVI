@@ -1,31 +1,38 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useTheme } from "next-themes"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, Lock, Mail, User, ChevronRight } from "lucide-react"
+import { signIn } from "next-auth/react"
+import { useSession } from "next-auth/react"
 
 export default function SignupPage() {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const { resolvedTheme } = useTheme()
   const router = useRouter()
+  const { data: session, status } = useSession()
   const [mounted, setMounted] = useState(false)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
   const [glitchActive, setGlitchActive] = useState(false)
   const [formFocus, setFormFocus] = useState<string | null>(null)
+  const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     setMounted(true)
+
+    // Check if already logged in
+    if (status === "authenticated") {
+      router.push("/dashboard")
+    }
 
     // Trigger glitch effect randomly
     const glitchInterval = setInterval(
@@ -37,7 +44,7 @@ export default function SignupPage() {
     )
 
     return () => clearInterval(glitchInterval)
-  }, [])
+  }, [router, status])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -54,13 +61,35 @@ export default function SignupPage() {
     return () => window.removeEventListener("mousemove", handleMouseMove)
   }, [])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Signup attempt with:", { name, email, password })
+    setError("")
 
-    // Trigger glitch effect on submit
-    setGlitchActive(true)
-    setTimeout(() => setGlitchActive(false), 500)
+    if (password !== confirmPassword) {
+      setError("Passwords do not match")
+      return
+    }
+
+    setIsLoading(true)
+
+    // In a real app, you would send this data to your API
+    // For demo purposes, we'll just simulate success and redirect
+    setTimeout(() => {
+      setIsLoading(false)
+      // Redirect to login page with success message
+      router.push("/login?registered=true")
+    }, 1500)
+  }
+
+  const handleSocialLogin = async (provider: string) => {
+    setIsLoading(true)
+    try {
+      await signIn(provider, { callbackUrl: "/dashboard" })
+    } catch (error) {
+      console.error(`${provider} login error:`, error)
+      setError(`An error occurred with ${provider} login`)
+      setIsLoading(false)
+    }
   }
 
   if (!mounted) return null
@@ -70,21 +99,19 @@ export default function SignupPage() {
   return (
     <div
       ref={containerRef}
-      className="min-h-screen bg-gray-100 dark:bg-[#0a0014] antialiased relative overflow-hidden flex items-center justify-center transition-colors duration-700"
+      className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-[#0a0014] p-4 antialiased relative overflow-hidden transition-colors duration-700"
     >
       {/* Cyberpunk Grid Background */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden -z-10">
-        <div
-          className="absolute inset-0 bg-[linear-gradient(to_right,#8a2be212_1px,transparent_1px),linear-gradient(to_bottom,#8a2be212_1px,transparent_1px)] bg-[size:30px_30px] 
-                     dark:bg-[linear-gradient(to_right,#bf00ff12_1px,transparent_1px),linear-gradient(to_bottom,#bf00ff12_1px,transparent_1px)] 
-                     [mask-image:radial-gradient(ellipse_70%_70%_at_50%_50%,#000_60%,transparent_100%)]"
-        ></div>
-      </div>
+      <div
+        className="absolute inset-0 bg-[linear-gradient(to_right,#8a2be212_1px,transparent_1px),linear-gradient(to_bottom,#8a2be212_1px,transparent_1px)] bg-[size:30px_30px] 
+                   dark:bg-[linear-gradient(to_right,#bf00ff12_1px,transparent_1px),linear-gradient(to_bottom,#bf00ff12_1px,transparent_1px)] 
+                   [mask-image:radial-gradient(ellipse_70%_70%_at_50%_50%,#000_60%,transparent_100%)] -z-10"
+      ></div>
 
-      {/* Animated Gradient Orbs */}
-      <div className="absolute inset-0 overflow-hidden -z-5">
-        <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-500/20 dark:bg-purple-600/20 rounded-full blur-3xl animate-float-slow"></div>
-        <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-cyan-500/20 dark:bg-cyan-600/20 rounded-full blur-3xl animate-float-slow-reverse"></div>
+      {/* Animated gradient orbs */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 dark:bg-purple-600/20 rounded-full blur-3xl animate-float-slow"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-500/20 dark:bg-cyan-600/20 rounded-full blur-3xl animate-float-slow-reverse"></div>
       </div>
 
       {/* Scanlines Effect */}
@@ -382,116 +409,98 @@ export default function SignupPage() {
             <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/50 to-cyan-500/50 rounded-2xl blur-md opacity-70 group-hover:opacity-100 transition-all duration-500"></div>
 
             {/* Form Container */}
-            <div className="relative bg-white/90 dark:bg-black/50 backdrop-blur-2xl rounded-2xl shadow-2xl border border-purple-300/30 dark:border-cyan-400/30 p-8 space-y-6 transition-colors duration-300">
-              <div className={`text-center ${glitchActive ? "glitch" : ""}`}>
-                <h2 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-cyan-400 to-purple-600 dark:from-purple-400 dark:via-cyan-300 dark:to-purple-500">
-                  Get Started
-                </h2>
-                <p className="mt-2 text-gray-600 dark:text-gray-400">Create your ENVI account</p>
-              </div>
+            <div className="relative bg-white/90 dark:bg-gray-900/50 backdrop-blur-lg shadow-xl rounded-2xl p-8 border border-gray-200 dark:border-purple-500/20">
+              <h2 className="text-3xl font-bold mb-6 text-center text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-cyan-500">
+                Create an Account
+              </h2>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-4">
-                  {/* Name Input */}
-                  <div className="relative">
-                    <div
-                      className={`absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 ${formFocus === "name" ? "text-purple-500 dark:text-cyan-400" : ""}`}
-                    >
-                      <User size={18} />
-                    </div>
-                    <Input
-                      type="text"
-                      placeholder="Full Name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      onFocus={() => setFormFocus("name")}
-                      onBlur={() => setFormFocus(null)}
-                      className={`h-12 pl-10 rounded-xl border-gray-300 dark:border-white/20 bg-white/80 dark:bg-black/30 focus:border-purple-500 dark:focus:border-cyan-400 transition-all duration-300 ${formFocus === "name" ? "border-purple-500 dark:border-cyan-400 shadow-[0_0_10px_rgba(138,43,226,0.3)] dark:shadow-[0_0_10px_rgba(0,255,255,0.3)]" : ""}`}
-                    />
-                    <div
-                      className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-purple-500 to-cyan-500 transition-all duration-300 rounded-full ${formFocus === "name" ? "w-full" : "w-0"}`}
-                    ></div>
-                  </div>
+              {error && (
+                <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
 
-                  {/* Email Input */}
-                  <div className="relative">
-                    <div
-                      className={`absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 ${formFocus === "email" ? "text-purple-500 dark:text-cyan-400" : ""}`}
-                    >
-                      <Mail size={18} />
-                    </div>
-                    <Input
-                      type="email"
-                      placeholder="Email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      onFocus={() => setFormFocus("email")}
-                      onBlur={() => setFormFocus(null)}
-                      className={`h-12 pl-10 rounded-xl border-gray-300 dark:border-white/20 bg-white/80 dark:bg-black/30 focus:border-purple-500 dark:focus:border-cyan-400 transition-all duration-300 ${formFocus === "email" ? "border-purple-500 dark:border-cyan-400 shadow-[0_0_10px_rgba(138,43,226,0.3)] dark:shadow-[0_0_10px_rgba(0,255,255,0.3)]" : ""}`}
-                    />
-                    <div
-                      className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-purple-500 to-cyan-500 transition-all duration-300 rounded-full ${formFocus === "email" ? "w-full" : "w-0"}`}
-                    ></div>
-                  </div>
-
-                  {/* Password Input */}
-                  <div className="relative">
-                    <div
-                      className={`absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-300 ${formFocus === "password" ? "text-purple-500 dark:text-cyan-400" : ""}`}
-                    >
-                      <Lock size={18} />
-                    </div>
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onFocus={() => setFormFocus("password")}
-                      onBlur={() => setFormFocus(null)}
-                      className={`h-12 pl-10 pr-10 rounded-xl border-gray-300 dark:border-white/20 bg-white/80 dark:bg-black/30 focus:border-purple-500 dark:focus:border-cyan-400 transition-all duration-300 ${formFocus === "password" ? "border-purple-500 dark:border-cyan-400 shadow-[0_0_10px_rgba(138,43,226,0.3)] dark:shadow-[0_0_10px_rgba(0,255,255,0.3)]" : ""}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-purple-500 dark:hover:text-cyan-400 transition-colors"
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                    <div
-                      className={`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-purple-500 to-cyan-500 transition-all duration-300 rounded-full ${formFocus === "password" ? "w-full" : "w-0"}`}
-                    ></div>
-                  </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 dark:focus:ring-cyan-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    placeholder="Enter your name"
+                  />
                 </div>
 
-                {/* Submit Button */}
-                <div className="relative group">
-                  <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-cyan-500 rounded-xl blur opacity-75 group-hover:opacity-100 transition duration-500 group-hover:duration-200"></div>
-                  <Button
-                    type="submit"
-                    className="relative w-full h-12 rounded-xl bg-gray-900 dark:bg-gray-800 text-white text-lg font-semibold 
-                               border border-purple-500/30 dark:border-cyan-500/30
-                               shadow-[0_0_15px_rgba(138,43,226,0.3)] dark:shadow-[0_0_15px_rgba(0,255,255,0.3)]
-                               hover:shadow-[0_0_25px_rgba(138,43,226,0.5)] dark:hover:shadow-[0_0_25px_rgba(0,255,255,0.5)]
-                               transition-all duration-300 ease-out group-hover:bg-gray-800 dark:group-hover:bg-gray-900"
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 dark:focus:ring-cyan-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    placeholder="Enter your email"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 dark:focus:ring-cyan-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    placeholder="Create a password"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="confirmPassword"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
                   >
-                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-400 dark:from-purple-300 dark:to-cyan-300 group-hover:from-purple-300 group-hover:to-cyan-300 dark:group-hover:from-purple-200 dark:group-hover:to-cyan-200 transition-all duration-300">
-                      Create Account
-                    </span>
-                    <ChevronRight className="absolute right-4 w-5 h-5 text-purple-400 dark:text-cyan-400 opacity-0 group-hover:opacity-100 transform translate-x-0 group-hover:translate-x-1 transition-all duration-300" />
-                  </Button>
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-purple-500 dark:focus:ring-cyan-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    placeholder="Confirm your password"
+                  />
                 </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-2 px-4 bg-gradient-to-r from-purple-600 to-cyan-500 hover:from-purple-700 hover:to-cyan-600 text-white font-medium rounded-lg shadow-lg hover:shadow-purple-500/20 dark:hover:shadow-cyan-500/20 transition-all duration-300 disabled:opacity-70"
+                >
+                  {isLoading ? "Creating account..." : "Sign Up"}
+                </button>
               </form>
 
-              <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-                Already have an account?{" "}
-                <Link
-                  href="/login"
-                  className="text-purple-500 hover:text-purple-600 dark:text-cyan-400 dark:hover:text-cyan-300 transition-colors font-semibold relative group"
-                >
-                  Sign in
-                  <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-purple-500 dark:bg-cyan-400 group-hover:w-full transition-all duration-300"></span>
-                </Link>
-              </p>
+              <div className="mt-6 text-center">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Already have an account?{" "}
+                  <Link href="/login" className="text-purple-600 dark:text-cyan-400 hover:underline">
+                    Login
+                  </Link>
+                </p>
+              </div>
             </div>
           </div>
         </motion.div>

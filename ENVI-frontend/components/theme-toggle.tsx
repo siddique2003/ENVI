@@ -17,12 +17,7 @@ export function ThemeToggle() {
   if (!mounted) return null
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 0.5 }}
-      className="fixed top-4 right-4 z-[100]"
-    >
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
       <Button
         variant="ghost"
         size="icon"
